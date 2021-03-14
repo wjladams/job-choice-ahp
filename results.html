@@ -85,6 +85,24 @@
       function myCallback(spreadsheetdata) {
         // do something with spreadsheet data here
         MATRIX_FROM_GSHEET = gsToMatrix(spreadsheetdata)
+        //Rename because google sucks
+        vs = " vs "
+        a1 = 'My Current Job'
+        a2 = 'A Possible New Job'
+        n1 = 'Work/life balance'
+        n2 = 'Relationships with coworkers and management'
+        n3 = 'Salary'
+        n4 = 'Professional fulfillment'
+        MATRIX_FROM_GSHEET[0][1]=a1+vs+ a2+ " wrt Work/life balance",
+        MATRIX_FROM_GSHEET[0][2]=a1+vs+a2+" wrt Relationships with coworkers and management",
+        MATRIX_FROM_GSHEET[0][3]=a1+vs+a2+" wrt Salary",
+        MATRIX_FROM_GSHEET[0][4]=a1+vs+a2+" wrt Professional fulfillment",
+        MATRIX_FROM_GSHEET[0][5]=n1+vs+n2,
+        MATRIX_FROM_GSHEET[0][6]=n2+vs+n3,
+        MATRIX_FROM_GSHEET[0][7]=n3+vs+n4,
+        MATRIX_FROM_GSHEET[0][8]=n1+vs+n3,
+        MATRIX_FROM_GSHEET[0][9]=n2+vs+n4,
+        MATRIX_FROM_GSHEET[0][10]=n1+vs+n4,
         AHP_MODEL = AHPTreeNode.from_matrix(MATRIX_FROM_GSHEET)
         //Fill in the select
         setupVoterSelection()
