@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    <link rel="stylesheet" href="results.css">
+    <title>Job Changing Results</title>
+  </head>
+  <body>
+    <h1>Job Changing Survey Results</h1>
+    <hr/>
+    Here are the results for the job changing model for the most recent participants.
+    <div class="form-group">
+    </div>
+    <table>
+      <tr>
+        <td><label for="voter">For Voter:</label></td>
+        <td>
+          <select id="voter" onchange="updateGraph();">
+          </select>
+        </td>
+      </tr>
+
+      <tr>
+        <td><label for="better">AHP Better Value:</label></td>
+        <td><input type="number" id="better" min="1.0" value="2.0" onchange="updateGraphFromId('better');" step="0.1"></input></td>
+      </tr>
+      <tr>
+        <td><label for="muchBetter">AHP Much Better Value:</label></td>
+        <td><input type="number" id="muchBetter" min="1.0" value="5.0" onchange="updateGraphFromId('muchBetter');" step="0.1"></input></td>
+      </tr>
+      <tr>
+        <td colspan="2">
+          <button type="button" class="btn btn-primary" onclick="resetBetter(); updateGraph();">Reset AHP Values</button>
+        </td>
+      </tr>
+    </table>
+    <hr/>
+    <div id='myPlot'><!-- Plotly chart will be drawn inside this DIV --></div>
+    <hr/>
+    <h2>Additional Information</h2>
+    Your results are above, please note the following:
+    <ul>
+      <li>The scores are out of 100 points.
+      <li>A 100 point score means that option is your perfect phone!
+      <li>Nothing will ever hit a perfect 100 points
+    </ul>
+    <!-- Optional JavaScript -->
+    <script src="https://cdn.jsdelivr.net/gh/dlens/anpjs@master/ahp.js"></script>
+    <!-- <script src="../anpjs/ahp.js"></script> -->
+    <!-- <script src="https://cdn.jsdelivr.net/gh/dlens/anpjs@v0.4.1/ahp.js"></script> -->
+    <!-- <script src="../anpjs/ahp.js"></script> -->
+    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
+    <!-- <script src="model.js"></script> -->
+    <script src="results_helpers.js"></script>
+    <!--Now calculations-->
+    <script>
+      var MATRIX_FROM_GSHEET = []
+      MAX_VOTERS = 20
+      MAX_PHONES=5
+      /**
+      * Sets up the voter choose <select> item
+      */
+      function setupVoterSelection() {
+        let timestampCol = 0
+        let nameCol = 11
+        let nrows = MATRIX_FROM_GSHEET.length
+        let endRow = nrows-1
+        let startRow = Math.max(nrows - MAX_VOTERS, 1)
+        let html = ""
+        for(let row=endRow; row >= startRow; row--) {
+          let name = MATRIX_FROM_GSHEET[row][nameCol]
+          let time = MATRIX_FROM_GSHEET[row][timestampCol]
+          let text = name+" at time: "+time
+          html+='<option value="'+row+'">'+text+"</option>\n";
+        }
+        document.getElementById('voter').innerHTML=html
+      }
+
+      /**
+      * Callback when the spreadsheet is fetched from google.
+      */
+      function myCallback(spreadsheetdata) {
+        // do something with spreadsheet data here
+        MATRIX_FROM_GSHEET = gsToMatrix(spreadsheetdata)
+        AHP_MODEL = AHPTreeNode.from_matrix(MATRIX_FROM_GSHEET)
+        //Fill in the select
+        setupVoterSelection()
+        //Update the graph now
+        updateGraph()
+      }
+
+      /**
+      Changes the better and much better back to their defaults
+      */
+      function resetBetter() {
+        document.getElementById('better').value = 2.0
+        document.getElementById('muchBetter').value = 5.0
+      }
+
+      /**
+      Gets the numeric value of an html item that has a value attribute
+      */
+      function getNumber(fromId) {
+        let rval = document.getElementById(fromId).value
+        return Number(rval)
+      }
+
+      /**
+      * Just a wrapper to call updateGraph() except we also check that
+      * the new better value is <= muchBetter.  If we set from better
+      * to get here, we update muchBetter, otherwise vice-versa
+      */
+      function updateGraphFromId(id) {
+        let better = getNumber('better')
+        let muchBetter = getNumber('muchBetter')
+        if (better > muchBetter) {
+          if (id == 'better') {
+            document.getElementById('muchBetter').value = better
+          } else {
+            document.getElementById('better').value = muchBetter
+          }
+        }
+        updateGraph()
+      }
+      /**
+      Updates the graph by:
+      1. Getting the better and much better values from the html items
+      2. Get the current selected user (which is a row in the matrix)
+      3. Creating the AHP_MODEL again from the MATRIX_FROM_GSHEET and our selected row
+      */
+      function updateGraph() {
+        let ourRow = document.getElementById('voter').value
+        let ratingsRow = 1
+        let better = getNumber('better')
+        let muchBetter = getNumber('muchBetter')
+        if (muchBetter < better) {
+          alert("Much Better should be >= better, returning to defaults")
+          resetBetter()
+          let better = document.getElementById('better').value
+          let muchBetter = document.getElementById('muchBetter').value
+        }
+        //Reload the model based on the new row and new better/much better values.
+        AHP_MODEL = AHPTreeNode.from_matrix(MATRIX_FROM_GSHEET, ourRow, ratingsRow, better, muchBetter)
+        //Now we have the AHP model populated, now synthesize
+        scores = AHP_MODEL.synthesize();
+        //Let's sort them from largest to smallest
+        indices = []
+        for(let i=0; i < scores.length; i++) {
+          indices.push(i)
+        }
+        indices.sort(function(a,b) {
+          return scores[b]-scores[a]
+        })
+        xs=[]
+        ys=[]
+        let phones_to_show = Math.min(scores.length, MAX_PHONES)
+        for(let i=0; i < phones_to_show; i++) {
+          xs[i] = AHP_MODEL.alts[indices[i]]
+          ys[i] = Math.round(scores[indices[i]]*100)
+        }
+        //Now we setup and do our plot
+        var data = [
+          {
+            x: xs,
+            y: ys,
+            type: 'bar'
+          }
+        ];
+        var layout = {
+          title: "Change Jobs Survey Results",
+          autosize: false,
+          //width: 500,
+          height: 650,
+          yaxis: {range: [0, 100]},
+          margin: {
+            l: 50,
+            r: 50,
+            b: 100,
+            t: 100,
+            pad: 4
+          },
+        };
+        Plotly.newPlot('myPlot', data, layout)
+        console.log(scores);
+      }
+    </script>
+    <script src="https://spreadsheets.google.com/feeds/cells/1oLTZ2RBfms0jkvMR0dg1_A6TEs8KipXdma_XyUIcF4o/1/public/values?alt=json-in-script&callback=myCallback"></script>
+    <!--
+    <script src="https://spreadsheets.google.com/feeds/cells/1jxuBHUYA8Jy5iSRx2PZ7lNg0Ag2gf-cC63LoCCru-j4/od6/public/values?alt=json-in-script&callback=myCallback"></script>
+  -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
+  </body>
+</html>
